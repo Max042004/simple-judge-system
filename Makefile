@@ -18,8 +18,11 @@ test: all
 
 # New "check-massif" rule
 check-massif: main
-	valgrind --tool=massif --massif-out-file=massif.out ./main < traces/trace-1.cmd
+	@echo "=== Massif Test Run ===" >> test_output.txt
+	valgrind --tool=massif --massif-out-file=massif.out ./main < traces/trace-2.cmd >> test_output.txt 2>&1
+	@echo "=== ms_print massif.out ===" >> test_output.txt
 	ms_print massif.out
+
 
 # Clean up
 clean:
