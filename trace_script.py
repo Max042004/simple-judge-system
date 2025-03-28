@@ -35,7 +35,7 @@ class Tracer:
             color = self.WHITE
         print(color, text, self.WHITE, sep = '')
 
-    def runTrace(self, tid):
+    def runTrace(self, tid, logfile):
         if not tid in self.traceDict:
             self.printInColor("ERROR: No trace with id %d" % tid, self.RED)
             return False
@@ -43,8 +43,11 @@ class Tracer:
         clist = self.command
 
         try:
-            with open(fname, 'r') as infile:
-                retcode = subprocess.call(clist, stdin=infile)
+            with open(fname, 'r') as infile, open(logfile, "a") as outf:
+                retcode = subprocess.call(
+                    clist, stdin=infile, 
+                    stdout=outf,
+                    stderr=subprocess.STDOUT)
         except Exception as e:
             self.printInColor("Call of '%s' failed: %s" % (" ".join(clist), e), self.RED)
             return False
@@ -52,6 +55,11 @@ class Tracer:
 
     def run(self, tid=0):
         print("---\tTrace\t\t")
+
+        logfile = "test_output.txt"
+        with open(logfile, "w") as outf:
+            outf.write("=== Starting test run ===\n")
+
         if tid == 0:
             tidList = self.traceDict.keys()
         else:
@@ -64,7 +72,7 @@ class Tracer:
         for t in tidList:
             tname = self.traceDict[t]
             print("+++ TESTING %s:" % tname)
-            ok = self.runTrace(t)
+            ok = self.runTrace(t, logfile)
 
 def run(name, args):
     prog = ""
