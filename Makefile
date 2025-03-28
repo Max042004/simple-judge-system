@@ -2,18 +2,27 @@
 CXX = g++
 CXXFLAGS = -Wall -Wextra -std=c++11
 
-# Name of the final executable
-TARGET = main
+# Gather all .cpp files in ./main/
+SOURCES  := $(wildcard main/*.cpp)
+# Convert each .cpp into a matching .o filename
+OBJECTS  := $(SOURCES:.cpp=.o)
+
+# The final executable's name
+TARGET   := program
 
 # Default rule: build everything
 all: $(TARGET)
 
-# Build rule: from main.cpp -> executable
-$(TARGET): main.cpp
-	$(CXX) $(CXXFLAGS) -o $(TARGET) main.cpp
+# Link all object files into the final executable
+$(TARGET): $(OBJECTS)
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+# Compile each .cpp into .o
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # 'make test' runs the compiled program through a Python trace script
-test: all
+test: $(TARGET)
 	python3 trace_script.py
 
 # New "check-massif" rule
@@ -26,6 +35,6 @@ check-massif: main
 
 # Clean up
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) main/*.o
 
 .PHONY: all clean test

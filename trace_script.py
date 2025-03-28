@@ -5,7 +5,7 @@ import subprocess
 class Tracer:
 
     traceDirectory = "traces"
-    main = "./main"
+    main = "./program"
     command = main
     useValgrind = False
     colored = False
