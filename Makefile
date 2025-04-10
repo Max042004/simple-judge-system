@@ -21,6 +21,10 @@ $(TARGET): $(OBJECTS)
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+# Run the program
+run: $(TARGET)
+	./$(TARGET)
+
 # 'make test' runs the compiled program through a Python trace script
 test: $(TARGET)
 	python3 trace_script.py
