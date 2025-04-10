@@ -87,9 +87,9 @@ std::pair<bool, std::string> AccountSystem::login() {
             std::cout << "password incorrect... please try again: ";
             std::cin >> password;
             pwd_wrong_count++;
-            if(pwd_wrong_count == 3) break;
+            if(pwd_wrong_count == 2) break;
         }
-        if(pwd_wrong_count == 3) continue;
+        if(pwd_wrong_count == 2) continue;
         else break;
     }
     login_user = user->getUsername();
