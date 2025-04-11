@@ -1,6 +1,6 @@
+// main.cpp
 #include <iostream>
-#include "JudgeSystem.h"
-#define blue(text)   "\033[34m" text "\033[0m"
+#include "controllers/SystemController.h"
 
 #define USER_DATA_PATH "./data/user/user.csv"
 #define PROBLEM_DATA_PATH  "./data/problem/problem.csv"
@@ -8,21 +8,20 @@
 #define VERSION "1.0.0"
 
 int main() {
-
     #ifdef _WIN32
         system("cls");
     #else
-        system("clear");
+        //system("clear");
     #endif
 
-    JudgeSystem judge(USER_DATA_PATH, PROBLEM_DATA_PATH, LOGIN_MSG_PATH, VERSION);
-    std::cout << blue("Simple Judge System start! Version: ") << VERSION << "\n";
+    SystemController system(USER_DATA_PATH, PROBLEM_DATA_PATH, LOGIN_MSG_PATH, VERSION);
+    std::cout << BLUE_TEXT("Simple Judge System start! Version: ") << VERSION << "\n";
 
     int result = 0;
     
     do {
-        result = judge.mainPage();
-    }while( result == 0 );
+        result = system.mainPage();
+    } while (result == 0);
 
     return 0;
 }
