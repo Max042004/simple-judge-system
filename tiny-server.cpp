@@ -15,6 +15,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <ctype.h>
+#include "main/controllers/SystemController.h"
+#include "main/models/UserRepository.h"
+#include "main/models/User.h"
 
 #define LISTENQ  1024  /* second argument to listen() */
 #define MAXLINE 1024   /* max length of a line */
@@ -146,8 +149,7 @@ extern "C" {
     int judge_submit_solution(const char* username, const char* problem_id, const char* code);
     char* judge_get_version();
 }
-
-char *default_mime_type = "text/plain";
+const char* default_mime_type = "text/plain";
 
 void rio_readinitb(rio_t *rp, int fd) {
     rp->rio_fd = fd;
@@ -158,7 +160,7 @@ void rio_readinitb(rio_t *rp, int fd) {
 ssize_t writen(int fd, void *usrbuf, size_t n) {
     size_t nleft = n;
     ssize_t nwritten;
-    char *bufp = usrbuf;
+    char *bufp = (char*)usrbuf;
 
     while (nleft > 0) {
         if ((nwritten = write(fd, bufp, nleft)) <= 0) {
@@ -217,7 +219,7 @@ static ssize_t rio_read(rio_t *rp, char *usrbuf, size_t n) {
  */
 ssize_t rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen) {
     int n, rc;
-    char c, *bufp = usrbuf;
+    char c, *bufp = (char*)usrbuf;
 
     for (n = 1; n < maxlen; n++) {
         if ((rc = rio_read(rp, &c, 1)) == 1) {
@@ -283,7 +285,7 @@ void handle_directory_request(int out_fd, int dir_fd, char *filename) {
                  "%Y-%m-%d %H:%M", localtime(&statbuf.st_mtime));
         format_size(size, &statbuf);
         if(S_ISREG(statbuf.st_mode) || S_ISDIR(statbuf.st_mode)) {
-            char *d = S_ISDIR(statbuf.st_mode) ? "/" : "";
+            const char *d = S_ISDIR(statbuf.st_mode) ? "/" : "";
             sprintf(buf, "<tr><td><a href=\"%s%s\">%s%s</a></td><td>%s</td><td>%s</td></tr>\n",
                     dp->d_name, d, dp->d_name, d, m_time, size);
             writen(out_fd, buf, strlen(buf));
@@ -653,4 +655,151 @@ void handle_api_request(int fd, http_request *req, struct sockaddr_in *clientadd
     }
 }
 
-void process(int fd, struct sockaddr_in *clientaddr) {}
+void process(int fd, struct sockaddr_in *clientaddr) {
+    http_request req;
+    parse_request(fd, &req);
+
+#ifdef LOG_ACCESS
+    printf("Connection from %s - Request: %s %s\n", 
+            inet_ntoa(clientaddr->sin_addr), 
+            req.method, 
+            req.request_path);
+#endif
+
+    // Handle API requests
+    if (strncmp(req.request_path, "/api/", 5) == 0) {
+        handle_api_request(fd, &req, clientaddr);
+        return;
+    }
+
+    // Open the file
+    struct stat sbuf;
+    int status = stat(req.filename, &sbuf);
+    if (status < 0) {
+        client_error(fd, 404, "Not found", "File not found");
+        return;
+    }
+
+    // Check if it's a directory
+    if (S_ISDIR(sbuf.st_mode)) {
+        // Handle directory request
+        int dir_fd = open(req.filename, O_RDONLY);
+        if (dir_fd < 0) {
+            client_error(fd, 500, "Internal Server Error", "Failed to open directory");
+            return;
+        }
+        handle_directory_request(fd, dir_fd, req.filename);
+        close(dir_fd);
+        return;
+    }
+
+    // Handle regular file
+    int file_fd = open(req.filename, O_RDONLY);
+    if (file_fd < 0) {
+        client_error(fd, 500, "Internal Server Error", "Failed to open file");
+        return;
+    }
+
+    // Set file size and range
+    size_t file_size = sbuf.st_size;
+    if (req.end == 0) {
+        req.end = file_size;
+    }
+
+    // Serve the file content
+    serve_static(fd, file_fd, &req, file_size);
+    close(file_fd);
+}
+
+int start_server(int argc, char** argv) {
+    struct sockaddr_in clientaddr;
+    int default_port = DEFAULT_PORT, listenfd, connfd;
+    socklen_t clientlen = sizeof(clientaddr);
+    
+    // Parse command line arguments
+    if (argc == 2) {
+        default_port = atoi(argv[1]);
+    }
+    
+    // Ignore SIGPIPE signal to prevent server crash when a client disconnects
+    signal(SIGPIPE, SIG_IGN);
+    
+    // Create and configure the listening socket
+    listenfd = open_listenfd(default_port);
+    if (listenfd < 0) {
+        perror("Failed to initialize listening socket");
+        exit(1);
+    }
+    
+    printf("Server listening on port %d\n", default_port);
+    
+    // Create child processes for handling connections
+    pid_t pid;
+    for (int i = 0; i < FORK_COUNT; i++) {
+        pid = fork();
+        if (pid == 0) { // Child process
+            while (1) {
+                connfd = accept(listenfd, (SA *)&clientaddr, &clientlen);
+                if (connfd >= 0) {
+                    process(connfd, &clientaddr);
+                    close(connfd);
+                }
+            }
+            exit(0);
+        }
+    }
+    
+    // Parent process also handles connections
+    while (1) {
+        connfd = accept(listenfd, (SA *)&clientaddr, &clientlen);
+        if (connfd >= 0) {
+            process(connfd, &clientaddr);
+            close(connfd);
+        }
+    }
+    
+    return 0;
+}
+// Implementation of the judge system API functions
+
+extern "C" {
+    // Login a user with the given username and password
+    int judge_login(const char* username, const char* password) {
+        // This should delegate to your existing authentication system
+        // For now, we'll provide a basic implementation
+        SystemController system("./data/user/user.csv", "./data/problem/problem.csv", "./msg/login.txt", "1.0.0");
+        
+        // Access the user repository directly for login validation
+        UserRepository userRepo;
+        userRepo.initialize("./data/user/user.csv");
+        
+        User* user = userRepo.findByUsername(username);
+        if (user && user->getPassword() == std::string(password)) {
+            userRepo.setCurrentUser(username);
+            return 1; // Success
+        }
+        
+        return 0; // Failure
+    }
+    
+    // Return a JSON string containing all problems
+    char* judge_list_problems() {
+        // This should query your problem repository
+        // For now, return a simple JSON array of problems
+        char* json = strdup("{\"problems\": [{\"id\": \"1\", \"title\": \"Hello World\", \"difficulty\": \"Easy\"}, {\"id\": \"2\", \"title\": \"Sum of Numbers\", \"difficulty\": \"Easy\"}]}");
+        return json; // Caller is responsible for freeing this memory
+    }
+    
+    // Submit a solution for a problem
+    int judge_submit_solution(const char* username, const char* problem_id, const char* code) {
+        // This should add the submission to your database and queue it for judging
+        // For now, just return success
+        return 1; // Success
+    }
+    
+    // Get the version of the judge system
+    char* judge_get_version() {
+        // Return the version
+        return strdup("1.0.0"); // Caller is responsible for freeing this memory
+    }
+}

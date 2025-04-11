@@ -1,6 +1,7 @@
 // main.cpp
 #include <iostream>
 #include "controllers/SystemController.h"
+#include "../tiny-server.h"
 
 #define USER_DATA_PATH "./data/user/user.csv"
 #define PROBLEM_DATA_PATH  "./data/problem/problem.csv"
@@ -18,6 +19,7 @@ int main() {
     std::cout << BLUE_TEXT("Simple Judge System start! Version: ") << VERSION << "\n";
 
     int result = 0;
+    
     
     do {
         result = system.mainPage();

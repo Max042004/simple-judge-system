@@ -18,9 +18,10 @@ OBJECTS  := $(SOURCES:.cpp=.o)
 
 # The final executable's name
 TARGET   := program
+SERVER_TARGET := tiny-server
 
 # Default rule: build everything
-all: $(TARGET)
+all: $(TARGET) $(SERVER_TARGET)
 
 # Link all object files into the final executable
 $(TARGET): $(OBJECTS)
@@ -30,9 +31,20 @@ $(TARGET): $(OBJECTS)
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+# Build the web server
+$(SERVER_TARGET): tiny-server.o $(OBJECTS)
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+tiny-server.o: tiny-server.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 # Run the program
 run: $(TARGET)
 	./$(TARGET)
+
+# Run the web server
+run-server: $(SERVER_TARGET)
+	./$(SERVER_TARGET)
 
 # 'make test' runs the compiled program through a Python trace script
 test: $(TARGET)
@@ -45,9 +57,8 @@ check-massif: main
 	@echo "=== ms_print massif.out ===" >> test_output.txt
 	ms_print massif.out
 
-
 # Clean up
 clean:
-	rm -f $(TARGET) main/*.o
+	rm -f $(TARGET) $(SERVER_TARGET) $(SRC_DIR)/*.o $(MODEL_DIR)/*.o $(VIEW_DIR)/*.o $(CONTROLLER_DIR)/*.o *.o
 
-.PHONY: all clean test
+.PHONY: all clean test run-server
