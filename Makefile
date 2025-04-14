@@ -3,6 +3,7 @@ CXX = g++
 CXXFLAGS = -Wall -Wextra -std=c++11
 
 # Directories
+
 SRC_DIR         := main
 MODEL_DIR       := $(SRC_DIR)/models
 VIEW_DIR        := $(SRC_DIR)/views
@@ -13,12 +14,12 @@ SOURCES := $(wildcard $(SRC_DIR)/*.cpp)
 SOURCES += $(wildcard $(MODEL_DIR)/*.cpp)
 SOURCES += $(wildcard $(VIEW_DIR)/*.cpp)
 SOURCES += $(wildcard $(CONTROLLER_DIR)/*.cpp)
+
 # Convert each .cpp into a matching .o filename
 OBJECTS  := $(SOURCES:.cpp=.o)
 
 # The final executable's name
 TARGET   := program
-SERVER_TARGET := tiny-server
 
 # Default rule: build everything
 all: $(TARGET) $(SERVER_TARGET)
@@ -31,20 +32,9 @@ $(TARGET): $(OBJECTS)
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Build the web server
-$(SERVER_TARGET): tiny-server.o $(OBJECTS)
-	$(CXX) $(CXXFLAGS) -o $@ $^
-
-tiny-server.o: tiny-server.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
 # Run the program
 run: $(TARGET)
 	./$(TARGET)
-
-# Run the web server
-run-server: $(SERVER_TARGET)
-	./$(SERVER_TARGET)
 
 # 'make test' runs the compiled program through a Python trace script
 test: $(TARGET)
