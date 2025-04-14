@@ -9,22 +9,29 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <iostream>
+#include <sys/select.h>
 #include <sys/sendfile.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <ctype.h>
-#include "main/controllers/SystemController.h"
-#include "main/models/UserRepository.h"
-#include "main/models/User.h"
+#include "controllers/SystemController.h"
+#include "models/UserRepository.h"
+#include "models/User.h"
 
 #define LISTENQ  1024  /* second argument to listen() */
 #define MAXLINE 1024   /* max length of a line */
 #define RIO_BUFSIZE 1024
 
+#define USER_DATA_PATH "./data/user/user.csv"
+#define PROBLEM_DATA_PATH  "./data/problem/problem.csv"
+#define LOGIN_MSG_PATH "./msg/login.txt"
+#define VERSION "1.0.0"
+
 #ifndef DEFAULT_PORT
-#define DEFAULT_PORT 9999 /* use this port if none given as arg to main() */
+#define DEFAULT_PORT 9998 /* use this port if none given as arg to main() */
 #endif
 
 #ifndef FORK_COUNT
@@ -34,6 +41,9 @@
 #ifndef NO_LOG_ACCESS
 #define LOG_ACCESS
 #endif
+
+static fd_set readfds;
+int listenfd;
 
 typedef struct {
     int rio_fd;                 /* descriptor for this buf */
@@ -267,7 +277,8 @@ void handle_directory_request(int out_fd, int dir_fd, char *filename) {
             "<html><head><style>",
             "body{font-family: monospace; font-size: 13px;}",
             "td {padding: 1.5px 6px;}",
-            "</style></head><body><table>\n");
+            "</style><link rel=\"shortcut icon\" href=\"#\">"
+            "</head><body><table>\n");
     writen(out_fd, buf, strlen(buf));
     DIR *d = fdopendir(dir_fd);
     struct dirent *dp;
@@ -312,7 +323,7 @@ static const char* get_mime_type(char *filename) {
 }
 
 int open_listenfd(int port) {
-    int listenfd, optval=1;
+    int optval=1;
     struct sockaddr_in serveraddr;
 
     /* Create a socket descriptor */
@@ -711,15 +722,9 @@ void process(int fd, struct sockaddr_in *clientaddr) {
     close(file_fd);
 }
 
-int start_server(int argc, char** argv) {
-    struct sockaddr_in clientaddr;
-    int default_port = DEFAULT_PORT, listenfd, connfd;
-    socklen_t clientlen = sizeof(clientaddr);
-    
-    // Parse command line arguments
-    if (argc == 2) {
-        default_port = atoi(argv[1]);
-    }
+int start_server() {
+    int default_port = DEFAULT_PORT;
+    FD_ZERO(&readfds);
     
     // Ignore SIGPIPE signal to prevent server crash when a client disconnects
     signal(SIGPIPE, SIG_IGN);
@@ -730,36 +735,42 @@ int start_server(int argc, char** argv) {
         perror("Failed to initialize listening socket");
         exit(1);
     }
+    int flags = fcntl(listenfd, F_GETFL);
+    fcntl(listenfd, F_SETFL, flags | O_NONBLOCK);
     
     printf("Server listening on port %d\n", default_port);
     
-    // Create child processes for handling connections
-    pid_t pid;
-    for (int i = 0; i < FORK_COUNT; i++) {
-        pid = fork();
-        if (pid == 0) { // Child process
-            while (1) {
-                connfd = accept(listenfd, (SA *)&clientaddr, &clientlen);
-                if (connfd >= 0) {
-                    process(connfd, &clientaddr);
-                    close(connfd);
-                }
-            }
-            exit(0);
-        }
+    return 0;
+}
+
+void AcceptRequest(){
+    int connfd;
+
+    FD_SET(listenfd, &readfds);
+    FD_SET(STDIN_FILENO, &readfds);
+    printf("select listening\n");
+    int rv = select(listenfd+1, &readfds, NULL, NULL, NULL);
+    printf("select get\n");
+    if (rv < 0) {
+        perror("select");
+        return;
     }
-    
-    // Parent process also handles connections
-    while (1) {
+
+    if (FD_ISSET(listenfd, &readfds)) {
+        FD_CLR(listenfd, &readfds);
+        struct sockaddr_in clientaddr;
+        socklen_t clientlen = sizeof(clientaddr);
         connfd = accept(listenfd, (SA *)&clientaddr, &clientlen);
         if (connfd >= 0) {
             process(connfd, &clientaddr);
             close(connfd);
         }
     }
-    
-    return 0;
+    FD_CLR(STDIN_FILENO, &readfds);
 }
+
+
+
 // Implementation of the judge system API functions
 
 extern "C" {
