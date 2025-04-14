@@ -1,5 +1,6 @@
 // controllers/SystemController.cpp
 #include "SystemController.h"
+#include "../tiny-server.h"
 #include <iostream>
 #include <cstdlib>
 
@@ -46,12 +47,14 @@ int SystemController::mainPage() {
     if (status == "USER LOGIN") {
         if (authController.login()) {
             status = "READY";
+            start_server();
         } else {
             return 0;
         }
     }
     
     mainMenuView.displayMainMenu();
+    AcceptRequest();
     int opt = mainMenuView.getMenuSelection();
     
     switch (opt) {
@@ -60,7 +63,7 @@ int SystemController::mainPage() {
             break;
         
         case 2: // Query judge version
-            mainMenuView.displayVersionInfo(getVersion());
+            mainMenuView.displayVersionInfo(version);
             break;
         
         // Other cases would be implemented here
