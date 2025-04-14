@@ -44,7 +44,7 @@
 #endif
 
 static fd_set readfds;
-int listenfd;
+int serverfd;
 
 typedef struct {
     int rio_fd;                 /* descriptor for this buf */
@@ -323,43 +323,43 @@ static const char* get_mime_type(char *filename) {
     return default_mime_type;
 }
 
-int open_listenfd(int port) {
+int open_serverfd(int port) {
     int optval=1;
     struct sockaddr_in serveraddr;
 
     /* Create a socket descriptor */
-    if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    if ((serverfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         return -1;
     }
 
     /* Eliminates "Address already in use" error from bind. */
-    if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR,
+    if (setsockopt(serverfd, SOL_SOCKET, SO_REUSEADDR,
                    (const void *)&optval , sizeof(int)) < 0) {
         return -1;
     }
 
     // 6 is TCP's protocol number
     // enable this, much faster : 4000 req/s -> 17000 req/s
-    if (setsockopt(listenfd, 6, TCP_CORK,
+    if (setsockopt(serverfd, 6, TCP_CORK,
                    (const void *)&optval , sizeof(int)) < 0) {
         return -1;
     }
 
-    /* Listenfd will be an endpoint for all requests to port
+    /* serverfd will be an endpoint for all requests to port
        on any IP address for this host */
     memset(&serveraddr, 0, sizeof(serveraddr));
     serveraddr.sin_family = AF_INET;
     serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
     serveraddr.sin_port = htons((unsigned short)port);
-    if (bind(listenfd, (SA *)&serveraddr, sizeof(serveraddr)) < 0) {
+    if (bind(serverfd, (SA *)&serveraddr, sizeof(serveraddr)) < 0) {
         return -1;
     }
 
     /* Make it a listening socket ready to accept connection requests */
-    if (listen(listenfd, LISTENQ) < 0) {
+    if (listen(serverfd, LISTENQ) < 0) {
         return -1;
     }
-    return listenfd;
+    return serverfd;
 }
 
 void url_decode(char* src, char* dest, int max) {
@@ -754,13 +754,13 @@ int start_server() {
     signal(SIGPIPE, SIG_IGN);
     
     // Create and configure the listening socket
-    listenfd = open_listenfd(default_port);
-    if (listenfd < 0) {
+    serverfd = open_serverfd(default_port);
+    if (serverfd < 0) {
         perror("Failed to initialize listening socket");
         exit(1);
     }
-    int server_flags = fcntl(listenfd, F_GETFL);
-    fcntl(listenfd, F_SETFL, server_flags | O_NONBLOCK);
+    int server_flags = fcntl(serverfd, F_GETFL);
+    fcntl(serverfd, F_SETFL, server_flags | O_NONBLOCK);
 
     int stdin_flags = fcntl(STDIN_FILENO, F_GETFL);
     fcntl(STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK);
@@ -773,21 +773,21 @@ int start_server() {
 void AcceptRequest(){
     int connfd;
 
-    FD_SET(listenfd, &readfds);
+    FD_SET(serverfd, &readfds);
     FD_SET(STDIN_FILENO, &readfds);
     printf("select listening\n");
-    int rv = select(listenfd+1, &readfds, NULL, NULL, NULL);
+    int rv = select(serverfd+1, &readfds, NULL, NULL, NULL);
     printf("select get\n");
     if (rv < 0) {
         perror("select");
         return;
     }
 
-    if (FD_ISSET(listenfd, &readfds)) {
-        FD_CLR(listenfd, &readfds);
+    if (serverfd > 0 && FD_ISSET(serverfd, &readfds)) {
+        FD_CLR(serverfd, &readfds);
         struct sockaddr_in clientaddr;
         socklen_t clientlen = sizeof(clientaddr);
-        connfd = accept(listenfd, (SA *)&clientaddr, &clientlen);
+        connfd = accept(serverfd, (SA *)&clientaddr, &clientlen);
         if (connfd >= 0) {
             process(connfd, &clientaddr);
             close(connfd);
