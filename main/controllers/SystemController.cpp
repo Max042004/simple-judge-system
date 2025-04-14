@@ -1,6 +1,7 @@
 // controllers/SystemController.cpp
 #include "SystemController.h"
 #include "../tiny-server.h"
+#include "../Global.h"
 #include <iostream>
 #include <cstdlib>
 

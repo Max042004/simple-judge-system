@@ -19,6 +19,7 @@
 #include <ctype.h>
 #include "controllers/SystemController.h"
 #include "models/UserRepository.h"
+#include "Global.h"
 #include "models/User.h"
 
 #define LISTENQ  1024  /* second argument to listen() */
@@ -656,6 +657,29 @@ void handle_api_request(int fd, http_request *req, struct sockaddr_in *clientadd
             
             // Free the allocated memory
             free(version);
+        } else {
+            client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for getting version");
+        }
+    }
+    // API endpoint for getting login user name
+    else if (strncmp(req->request_path, "/api/opt/1", 10) == 0) {
+        if (strcasecmp(req->method, "GET") == 0) {
+            // Call the judge system function to get version
+            std::string username = userRepo.getCurrentUserName();
+            const char* name = username.c_str();
+            
+            // Format HTML response body
+            char response[MAXLINE];
+            snprintf(response, sizeof(response), "<p>Hello %s</p>", name);
+
+            // Build HTTP response
+            char buf[MAXLINE * 2]; // Just to be safe
+            snprintf(buf, sizeof(buf),
+                "HTTP/1.1 200 OK\r\n"
+                "Content-length: %lu\r\n"
+                "Content-type: text/html\r\n\r\n"
+                "%s", strlen(response), response);
+            writen(fd, buf, strlen(buf));
         } else {
             client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for getting version");
         }
