@@ -7,6 +7,7 @@
 #include <chrono>
 #include <regex>
 #include <unistd.h>
+#include <termios.h>
 
 void MainMenuView::displayMainMenu() {
     std::cout << "+";
@@ -38,8 +39,9 @@ void MainMenuView::displayMainMenu() {
 
 int MainMenuView::getMenuSelection() {
     char input;
-    int nread = read(STDIN_FILENO, &input, 100);
+    int nread = read(STDIN_FILENO, &input, 1);
     if(nread <= 0) return 0;
+    tcflush(STDIN_FILENO, TCIFLUSH);
     static const std::regex pattern("^[1-7]$");
     std::string s(1, input);
     if(std::regex_match(s, pattern)) return (input - 48);
