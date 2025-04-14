@@ -1,5 +1,6 @@
 // views/LoginView.cpp
 #include "LoginView.h"
+#include "MainMenuView.h"
 #include <iostream>
 
 void LoginView::showLoginPrompt() {
