@@ -6,6 +6,7 @@
 #include <thread>
 #include <chrono>
 #include <regex>
+#include <unistd.h>
 
 void MainMenuView::displayMainMenu() {
     std::cout << "+";
@@ -36,11 +37,12 @@ void MainMenuView::displayMainMenu() {
 }
 
 int MainMenuView::getMenuSelection() {
-    std::string input;
-    std::cin.ignore();
-    getline(std::cin, input);
+    char input;
+    int nread = read(STDIN_FILENO, &input, 100);
+    if(nread <= 0) return 0;
     static const std::regex pattern("^[1-7]$");
-    if(std::regex_match(input, pattern)) return std::stoi(input);
+    std::string s(1, input);
+    if(std::regex_match(s, pattern)) return (input - 48);
     else return -1;
 }
 

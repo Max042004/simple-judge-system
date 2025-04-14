@@ -735,8 +735,11 @@ int start_server() {
         perror("Failed to initialize listening socket");
         exit(1);
     }
-    int flags = fcntl(listenfd, F_GETFL);
-    fcntl(listenfd, F_SETFL, flags | O_NONBLOCK);
+    int server_flags = fcntl(listenfd, F_GETFL);
+    fcntl(listenfd, F_SETFL, server_flags | O_NONBLOCK);
+
+    int stdin_flags = fcntl(STDIN_FILENO, F_GETFL);
+    fcntl(STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK);
     
     printf("Server listening on port %d\n", default_port);
     
