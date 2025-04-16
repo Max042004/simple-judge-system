@@ -471,7 +471,7 @@ void serve_static(int out_fd, int in_fd, http_request *req,
 }
 
 // New function to handle API requests
-void handle_request(int fd, http_request *req, struct sockaddr_in *clientaddr) {
+void handle_request(int fd, http_request *req) {
     char response[4096];
     char username[256], password[256];
     
@@ -576,7 +576,7 @@ void process(int fd, struct sockaddr_in *clientaddr) {
 
     // Handle API requests
     if (strncmp(req.request_path, "/api/", 5) == 0) {
-        handle_request(fd, &req, clientaddr);
+        handle_request(fd, &req);
         return;
     }
 
