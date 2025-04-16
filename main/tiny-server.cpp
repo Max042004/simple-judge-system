@@ -390,13 +390,15 @@ void serve_static(int out_fd, int in_fd, http_request *req,
             get_mime_type(req->file_name));
 
     writen(out_fd, buf, strlen(buf));
-    off_t offset = req->offset; /* copy */
-    while(offset < req->end) {
+    // Copy file content
+    off_t offset = req->offset;
+    size_t remaining = req->end - req->offset;
+    while(remaining > 0) {
         if(sendfile(out_fd, in_fd, &offset, req->end - req->offset) <= 0) {
             break;
         }
 #ifdef LOG_ACCESS
-        printf("offset: %d \n\n", (unsigned int)offset);
+        printf("offset: %lu \n\n", offset);
 #endif
         close(out_fd);
         break;
