@@ -154,7 +154,7 @@ static ssize_t rio_read(rio_t *rp, char *usrbuf, int n) {
  * rio_readlineb - robustly read a text line (buffered)
  */
 ssize_t rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen) {
-    int n, rc;
+    size_t n, rc;
     char c, *bufp = (char*)usrbuf;
 
     for (n = 1; n < maxlen; n++) {
