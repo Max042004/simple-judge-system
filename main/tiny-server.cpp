@@ -57,7 +57,7 @@ typedef struct {
 typedef struct sockaddr SA;
 
 typedef struct {
-    char filename[512];
+    char file_name[512];
     off_t offset;              /* for support Range */
     size_t end;
     char method[8];            /* GET or POST */
@@ -428,10 +428,10 @@ void parse_request(int fd, http_request *req) {
             }
         }
     }
-    url_decode(filename, req->filename, MAXLINE);
+    url_decode(filename, req->file_name, MAXLINE);
 }
 
-void client_error(int fd, int status, char *msg, char *longmsg) {
+void client_error(int fd, int status, const char *msg, const char *longmsg) {
     char buf[MAXLINE];
     sprintf(buf, "HTTP/1.1 %d %s\r\n", status, msg);
     sprintf(buf + strlen(buf),
@@ -454,7 +454,7 @@ void serve_static(int out_fd, int in_fd, http_request *req,
     sprintf(buf + strlen(buf), "Content-length: %lu\r\n",
             req->end - req->offset);
     sprintf(buf + strlen(buf), "Content-type: %s\r\n\r\n",
-            get_mime_type(req->filename));
+            get_mime_type(req->file_name));
 
     writen(out_fd, buf, strlen(buf));
     off_t offset = req->offset; /* copy */
@@ -582,14 +582,14 @@ void process(int fd, struct sockaddr_in *clientaddr) {
 
     // Open the file
     struct stat sbuf;
-    int status = stat(req.filename, &sbuf);
+    int status = stat(req.file_name, &sbuf);
     if (status < 0) {
         client_error(fd, 404, "Not found", "File not found");
         return;
     }
 
     // Handle regular file
-    int file_fd = open(req.filename, O_RDONLY);
+    int file_fd = open(req.file_name, O_RDONLY);
     if (file_fd < 0) {
         client_error(fd, 500, "Internal Server Error", "Failed to open file");
         return;
