@@ -418,7 +418,7 @@ void parse_request(int fd, http_request *req) {
         filename = uri + 1;
         int length = strlen(filename);
         if (length == 0) {
-            filename = ".";
+            filename = (char*)".";
         } else {
             for (int i=0; i < length; ++i) {
                 if (filename[i] == '?') {
@@ -473,7 +473,7 @@ void serve_static(int out_fd, int in_fd, http_request *req,
 // New function to handle API requests
 void handle_request(int fd, http_request *req, struct sockaddr_in *clientaddr) {
     char response[4096];
-    char username[256], password[256], problem_id[256], code[2048];
+    char username[256], password[256];
     
     // API endpoint for login
     if (strncmp(req->request_path, "/api/login", 10) == 0) {
