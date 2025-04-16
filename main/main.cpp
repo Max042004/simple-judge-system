@@ -13,7 +13,7 @@ int main() {
     #ifdef _WIN32
         system("cls");
     #else
-        system("clear");
+        //system("clear");
     #endif
 
     globalSystemController = new SystemController(USER_DATA_PATH, PROBLEM_DATA_PATH, LOGIN_MSG_PATH, VERSION);

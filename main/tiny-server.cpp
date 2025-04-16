@@ -18,32 +18,24 @@
 #include <unistd.h>
 #include <ctype.h>
 #include "pages/LoginPage.h"
+#include "controllers/SystemController.h"
 
 #define LISTENQ  1024  /* second argument to listen() */
 #define MAXLINE 1024   /* max length of a line */
 #define RIO_BUFSIZE 1024
 
-#define USER_DATA_PATH "./data/user/user.csv"
-#define PROBLEM_DATA_PATH  "./data/problem/problem.csv"
-#define LOGIN_MSG_PATH "./msg/login.txt"
-#define VERSION "1.0.0"
-
 #ifndef DEFAULT_PORT
 #define DEFAULT_PORT 9999 /* use this port if none given as arg to main() */
-#endif
-
-#ifndef FORK_COUNT
-#define FORK_COUNT 4
 #endif
 
 #ifndef NO_LOG_ACCESS
 #define LOG_ACCESS
 #endif
 
+// fd set
 static fd_set readfds;
 int serverfd;
 
-#include "controllers/SystemController.h"
 extern SystemController* globalSystemController;
 
 typedef struct {
@@ -205,7 +197,7 @@ static const char* get_mime_type(char *filename) {
             }
             map++;
         }
-        fprintf(stderr, "⚠️ Warning: Unknown file type: %s\n", dot);
+        fprintf(stderr, "Warning: Unknown file type: %s\n", dot);
     }
     return default_mime_type;
 }
@@ -418,7 +410,7 @@ void handle_request(int fd, http_request *req) {
                 serve_login_page(fd);
             }
             else{
-                serve_submission_page(fd, globalSystemController->getUserRepo().getCurrentUser().c_str());
+                serve_submission_page(fd, globalSystemController->getAuthController().getCurrentUser().c_str());
             }
         } else {
             client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for login");
@@ -596,9 +588,7 @@ void AcceptRequest(){
 
     FD_SET(serverfd, &readfds);
     FD_SET(STDIN_FILENO, &readfds);
-    printf("select listening\n");
     int rv = select(serverfd+1, &readfds, NULL, NULL, NULL);
-    printf("select get\n");
     if (rv < 0) {
         perror("select");
         return;
