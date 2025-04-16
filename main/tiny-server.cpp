@@ -121,7 +121,7 @@ ssize_t writen(int fd, void *usrbuf, size_t n) {
  *    entry, rio_read() refills the internal buffer via a call to
  *    read() if the internal buffer is empty.
  */
-static ssize_t rio_read(rio_t *rp, char *usrbuf, size_t n) {
+static ssize_t rio_read(rio_t *rp, char *usrbuf, int n) {
     int cnt;
     while (rp->rio_cnt <= 0) {  /* refill if buf is empty */
 
