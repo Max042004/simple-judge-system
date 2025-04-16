@@ -48,9 +48,8 @@ int SystemController::mainPage() {
     if (status == "USER LOGIN") {
         if (!userRepo.getIsLogin()) {
             AcceptRequest();
-            status = "READY";
             return 0;
-            }
+        }else status = "READY";
     }
     
     mainMenuView.displayMainMenu();

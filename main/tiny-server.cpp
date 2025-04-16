@@ -263,45 +263,6 @@ void format_size(char* buf, struct stat *stat) {
     }
 }
 
-void handle_directory_request(int out_fd, int dir_fd, char *filename) {
-    char buf[MAXLINE], m_time[32], size[16];
-    struct stat statbuf;
-    sprintf(buf, "HTTP/1.1 200 OK\r\n%s%s%s%s%s",
-            "Content-Type: text/html\r\n\r\n",
-            "<html><head><style>",
-            "body{font-family: monospace; font-size: 13px;}",
-            "td {padding: 1.5px 6px;}",
-            "</style><link rel=\"shortcut icon\" href=\"#\">"
-            "</head><body><table>\n");
-    writen(out_fd, buf, strlen(buf));
-    DIR *d = fdopendir(dir_fd);
-    struct dirent *dp;
-    int ffd;
-    while ((dp = readdir(d)) != NULL) {
-        if(!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..")) {
-            continue;
-        }
-        if ((ffd = openat(dir_fd, dp->d_name, O_RDONLY)) == -1) {
-            perror(dp->d_name);
-            continue;
-        }
-        fstat(ffd, &statbuf);
-        strftime(m_time, sizeof(m_time),
-                 "%Y-%m-%d %H:%M", localtime(&statbuf.st_mtime));
-        format_size(size, &statbuf);
-        if(S_ISREG(statbuf.st_mode) || S_ISDIR(statbuf.st_mode)) {
-            const char *d = S_ISDIR(statbuf.st_mode) ? "/" : "";
-            sprintf(buf, "<tr><td><a href=\"%s%s\">%s%s</a></td><td>%s</td><td>%s</td></tr>\n",
-                    dp->d_name, d, dp->d_name, d, m_time, size);
-            writen(out_fd, buf, strlen(buf));
-        }
-        close(ffd);
-    }
-    sprintf(buf, "</table></body></html>");
-    writen(out_fd, buf, strlen(buf));
-    closedir(d);
-}
-
 static const char* get_mime_type(char *filename) {
     char *dot = strrchr(filename, '.');
     if(dot) { // strrchar Locate last occurrence of character in string
@@ -624,19 +585,6 @@ void process(int fd, struct sockaddr_in *clientaddr) {
     int status = stat(req.filename, &sbuf);
     if (status < 0) {
         client_error(fd, 404, "Not found", "File not found");
-        return;
-    }
-
-    // Check if it's a directory
-    if (S_ISDIR(sbuf.st_mode)) {
-        // Handle directory request
-        int dir_fd = open(req.filename, O_RDONLY);
-        if (dir_fd < 0) {
-            client_error(fd, 500, "Internal Server Error", "Failed to open directory");
-            return;
-        }
-        handle_directory_request(fd, dir_fd, req.filename);
-        close(dir_fd);
         return;
     }
 
