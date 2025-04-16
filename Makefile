@@ -8,12 +8,14 @@ SRC_DIR         := main
 MODEL_DIR       := $(SRC_DIR)/models
 VIEW_DIR        := $(SRC_DIR)/views
 CONTROLLER_DIR  := $(SRC_DIR)/controllers
+PAGE_DIR		:= $(SRC_DIR)/pages
 
 # Gather all .cpp files in the src directories
 SOURCES := $(wildcard $(SRC_DIR)/*.cpp)
 SOURCES += $(wildcard $(MODEL_DIR)/*.cpp)
 SOURCES += $(wildcard $(VIEW_DIR)/*.cpp)
 SOURCES += $(wildcard $(CONTROLLER_DIR)/*.cpp)
+SOURCES += $(wildcard $(PAGE_DIR)/*.cpp)
 
 # Convert each .cpp into a matching .o filename
 OBJECTS  := $(SOURCES:.cpp=.o)

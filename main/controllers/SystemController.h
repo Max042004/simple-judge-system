@@ -33,6 +33,9 @@ public:
     std::string getProblemPath() const { return problemDataPath; }
     std::string getMsgPath() const { return loginMsgPath; }
     std::string getVersion() const { return version; }
+
+    UserRepository& getUserRepo() { return userRepo; }
+    AuthController& getAuthController() { return authController; }
 };
 
 #endif // SYSTEM_CONTROLLER_H

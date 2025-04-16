@@ -81,12 +81,13 @@ std::vector<User>& UserRepository::getAllUsers() {
 void UserRepository::setCurrentUser(const std::string& username) {
     currentUser = username;
     globalCurrentUser = username;
+    is_login = true;
 }
 
 std::string UserRepository::getCurrentUser() const {
     return currentUser;
 }
 
-std::string UserRepository::getCurrentUserName() {
-    return globalCurrentUser;
+bool UserRepository::getIsLogin() {
+    return is_login;
 }

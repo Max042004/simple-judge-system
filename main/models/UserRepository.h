@@ -4,6 +4,7 @@
 
 #include <string>
 #include <vector>
+#include <stdlib.h>
 #include "User.h"
 
 class UserRepository {
@@ -11,6 +12,7 @@ private:
     std::vector<User> users;
     std::string filePath;
     std::string currentUser;
+    bool is_login = false;
     
 public:
     UserRepository() = default;
@@ -27,8 +29,8 @@ public:
     void setCurrentUser(const std::string& username);
     std::string getCurrentUser() const;
     
-    // Static access for global state
-    static std::string getCurrentUserName();
+    // access to whether login
+    bool getIsLogin();
 };
 
 #endif // USER_REPOSITORY_H

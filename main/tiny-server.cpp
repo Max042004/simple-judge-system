@@ -17,10 +17,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <ctype.h>
-#include "controllers/SystemController.h"
-#include "models/UserRepository.h"
-#include "Global.h"
-#include "models/User.h"
+#include "pages/LoginPage.h"
 
 #define LISTENQ  1024  /* second argument to listen() */
 #define MAXLINE 1024   /* max length of a line */
@@ -32,7 +29,7 @@
 #define VERSION "1.0.0"
 
 #ifndef DEFAULT_PORT
-#define DEFAULT_PORT 9998 /* use this port if none given as arg to main() */
+#define DEFAULT_PORT 9999 /* use this port if none given as arg to main() */
 #endif
 
 #ifndef FORK_COUNT
@@ -45,6 +42,9 @@
 
 static fd_set readfds;
 int serverfd;
+
+#include "controllers/SystemController.h"
+extern SystemController* globalSystemController;
 
 typedef struct {
     int rio_fd;                 /* descriptor for this buf */
@@ -153,13 +153,6 @@ mime_map meme_types [] = {
     {NULL, NULL},
 };
 
-// Forward declarations for judge system API functions
-extern "C" {
-    int judge_login(const char* username, const char* password);
-    char* judge_list_problems();
-    int judge_submit_solution(const char* username, const char* problem_id, const char* code);
-    char* judge_get_version();
-}
 const char* default_mime_type = "text/plain";
 
 void rio_readinitb(rio_t *rp, int fd) {
@@ -410,7 +403,7 @@ void parse_request(int fd, http_request *req) {
     rio_t rio;
     char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
     char* query_string_ptr;
-    
+   
     // Initialize request
     req->offset = 0;
     req->end = 0;
@@ -421,7 +414,7 @@ void parse_request(int fd, http_request *req) {
     rio_readinitb(&rio, fd);
     rio_readlineb(&rio, buf, MAXLINE);
     sscanf(buf, "%s %s %s", method, uri, version);
-    
+   
     // Store method
     strcpy(req->method, method);
     
@@ -446,7 +439,7 @@ void parse_request(int fd, http_request *req) {
             sscanf(buf + 15, "%d", &req->content_length);
         }
     }
-    
+
     // Read POST data if present
     if (strcasecmp(method, "POST") == 0 && req->content_length > 0) {
         int bytes_read = 0;
@@ -458,7 +451,7 @@ void parse_request(int fd, http_request *req) {
         }
         req->post_data[bytes_read] = '\0';
     }
-    
+
     char* filename = uri;
     if(uri[0] == '/') {
         filename = uri + 1;
@@ -517,12 +510,27 @@ void serve_static(int out_fd, int in_fd, http_request *req,
 }
 
 // New function to handle API requests
-void handle_api_request(int fd, http_request *req, struct sockaddr_in *clientaddr) {
+void handle_request(int fd, http_request *req, struct sockaddr_in *clientaddr) {
     char response[4096];
     char username[256], password[256], problem_id[256], code[2048];
     
     // API endpoint for login
     if (strncmp(req->request_path, "/api/login", 10) == 0) {
+        if (strcasecmp(req->method, "GET") == 0) {
+            // If user is not logged in, show login page
+            if(!globalSystemController->getUserRepo().getIsLogin()){
+                serve_login_page(fd);
+            }
+            else{
+                serve_submission_page(fd, globalSystemController->getUserRepo().getCurrentUser().c_str());
+            }
+        } else {
+            client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for login");
+        }
+    }
+    // API endpoint for login
+    else if (strncmp(req->request_path, "/api/user_login", 15) == 0) {
+        char buf[MAXLINE];
         if (strcasecmp(req->method, "POST") == 0) {
             // Parse POST data for username and password
             // This is a very simple parser for "username=foo&password=bar" format
@@ -535,6 +543,7 @@ void handle_api_request(int fd, http_request *req, struct sockaddr_in *clientadd
                 char *end = strchr(username_str, '&');
                 if (end) *end = '\0';
                 url_decode(username_str, username, 256);
+                printf("%s\n", username);
                 
                 // Extract password
                 password_str += 9; // Skip "password="
@@ -543,129 +552,32 @@ void handle_api_request(int fd, http_request *req, struct sockaddr_in *clientadd
                 url_decode(password_str, password, 256);
                 
                 // Call the judge system login function
-                int login_result = judge_login(username, password);
+                globalSystemController->getUserRepo().setCurrentUser(username);
+
+                sprintf(buf, "HTTP/1.1 303 See Other\r\nLocation: /api/login\r\n\r\n");
+                writen(fd, buf, strlen(buf));
+                return;
                 
-                if (login_result) {
-                    // Success
-                    sprintf(response, "{\"success\": true, \"message\": \"Login successful\"}");
-                } else {
-                    // Failure
-                    sprintf(response, "{\"success\": false, \"message\": \"Invalid username or password\"}");
-                }
             } else {
                 sprintf(response, "{\"success\": false, \"message\": \"Missing username or password\"}");
             }
             
             // Send the response
-            char buf[MAXLINE];
             sprintf(buf, "HTTP/1.1 200 OK\r\n");
             sprintf(buf + strlen(buf), "Content-length: %lu\r\n", strlen(response));
             sprintf(buf + strlen(buf), "Content-type: application/json\r\n\r\n");
             sprintf(buf + strlen(buf), "%s", response);
             writen(fd, buf, strlen(buf));
         } else {
-            client_error(fd, 405, "Method Not Allowed", "Only POST requests are allowed for login");
-        }
-    }
-    // API endpoint for listing problems
-    else if (strncmp(req->request_path, "/api/problems", 13) == 0) {
-        if (strcasecmp(req->method, "GET") == 0) {
-            // Call the judge system function to get problems
-            char *problems_json = judge_list_problems();
-            
-            // Send the response
-            char buf[MAXLINE];
-            sprintf(buf, "HTTP/1.1 200 OK\r\n");
-            sprintf(buf + strlen(buf), "Content-length: %lu\r\n", strlen(problems_json));
-            sprintf(buf + strlen(buf), "Content-type: application/json\r\n\r\n");
-            sprintf(buf + strlen(buf), "%s", problems_json);
-            writen(fd, buf, strlen(buf));
-            
-            // Free the allocated memory
-            free(problems_json);
-        } else {
-            client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for listing problems");
-        }
-    }
-    // API endpoint for submitting solutions
-    else if (strncmp(req->request_path, "/api/submit", 11) == 0) {
-        if (strcasecmp(req->method, "POST") == 0) {
-            // Parse POST data for submission details
-            // This assumes a format like "username=foo&problem_id=123&code=..."
-            char *username_str = strstr(req->post_data, "username=");
-            char *problem_id_str = strstr(req->post_data, "problem_id=");
-            char *code_str = strstr(req->post_data, "code=");
-            
-            if (username_str && problem_id_str && code_str) {
-                // Extract username
-                username_str += 9; // Skip "username="
-                char *end = strchr(username_str, '&');
-                if (end) *end = '\0';
-                url_decode(username_str, username, 256);
-                
-                // Extract problem_id
-                problem_id_str += 11; // Skip "problem_id="
-                end = strchr(problem_id_str, '&');
-                if (end) *end = '\0';
-                url_decode(problem_id_str, problem_id, 256);
-                
-                // Extract code
-                code_str += 5; // Skip "code="
-                url_decode(code_str, code, 2048);
-                
-                // Call the judge system function to submit the solution
-                int submit_result = judge_submit_solution(username, problem_id, code);
-                
-                if (submit_result) {
-                    // Success
-                    sprintf(response, "{\"success\": true, \"message\": \"Solution submitted successfully\"}");
-                } else {
-                    // Failure
-                    sprintf(response, "{\"success\": false, \"message\": \"Failed to submit solution\"}");
-                }
-            } else {
-                sprintf(response, "{\"success\": false, \"message\": \"Missing required parameters\"}");
-            }
-            
-            // Send the response
-            char buf[MAXLINE];
-            sprintf(buf, "HTTP/1.1 200 OK\r\n");
-            sprintf(buf + strlen(buf), "Content-length: %lu\r\n", strlen(response));
-            sprintf(buf + strlen(buf), "Content-type: application/json\r\n\r\n");
-            sprintf(buf + strlen(buf), "%s", response);
-            writen(fd, buf, strlen(buf));
-        } else {
-            client_error(fd, 405, "Method Not Allowed", "Only POST requests are allowed for submitting solutions");
-        }
-    }
-    // API endpoint for getting system version
-    else if (strncmp(req->request_path, "/api/version", 12) == 0) {
-        if (strcasecmp(req->method, "GET") == 0) {
-            // Call the judge system function to get version
-            char *version = judge_get_version();
-            
-            // Format the response
-            sprintf(response, "{\"version\": \"%s\"}", version);
-            
-            // Send the response
-            char buf[MAXLINE];
-            sprintf(buf, "HTTP/1.1 200 OK\r\n");
-            sprintf(buf + strlen(buf), "Content-length: %lu\r\n", strlen(response));
-            sprintf(buf + strlen(buf), "Content-type: application/json\r\n\r\n");
-            sprintf(buf + strlen(buf), "%s", response);
-            writen(fd, buf, strlen(buf));
-            
-            // Free the allocated memory
-            free(version);
-        } else {
-            client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for getting version");
+            printf("%s\n", req->method);
+            client_error(fd, 405, "Method Not Allowed", "Only POST requests are allowed for check_login");
         }
     }
     // API endpoint for getting login user name
     else if (strncmp(req->request_path, "/api/opt/1", 10) == 0) {
         if (strcasecmp(req->method, "GET") == 0) {
             // Call the judge system function to get version
-            std::string username = userRepo.getCurrentUserName();
+            std::string username = globalSystemController->getAuthController().getCurrentUser();
             const char* name = username.c_str();
             
             // Format HTML response body
@@ -703,7 +615,7 @@ void process(int fd, struct sockaddr_in *clientaddr) {
 
     // Handle API requests
     if (strncmp(req.request_path, "/api/", 5) == 0) {
-        handle_api_request(fd, &req, clientaddr);
+        handle_request(fd, &req, clientaddr);
         return;
     }
 
@@ -794,50 +706,4 @@ void AcceptRequest(){
         }
     }
     FD_CLR(STDIN_FILENO, &readfds);
-}
-
-
-
-// Implementation of the judge system API functions
-
-extern "C" {
-    // Login a user with the given username and password
-    int judge_login(const char* username, const char* password) {
-        // This should delegate to your existing authentication system
-        // For now, we'll provide a basic implementation
-        SystemController system("./data/user/user.csv", "./data/problem/problem.csv", "./msg/login.txt", "1.0.0");
-        
-        // Access the user repository directly for login validation
-        UserRepository userRepo;
-        userRepo.initialize("./data/user/user.csv");
-        
-        User* user = userRepo.findByUsername(username);
-        if (user && user->getPassword() == std::string(password)) {
-            userRepo.setCurrentUser(username);
-            return 1; // Success
-        }
-        
-        return 0; // Failure
-    }
-    
-    // Return a JSON string containing all problems
-    char* judge_list_problems() {
-        // This should query your problem repository
-        // For now, return a simple JSON array of problems
-        char* json = strdup("{\"problems\": [{\"id\": \"1\", \"title\": \"Hello World\", \"difficulty\": \"Easy\"}, {\"id\": \"2\", \"title\": \"Sum of Numbers\", \"difficulty\": \"Easy\"}]}");
-        return json; // Caller is responsible for freeing this memory
-    }
-    
-    // Submit a solution for a problem
-    int judge_submit_solution(const char* username, const char* problem_id, const char* code) {
-        // This should add the submission to your database and queue it for judging
-        // For now, just return success
-        return 1; // Success
-    }
-    
-    // Get the version of the judge system
-    char* judge_get_version() {
-        // Return the version
-        return strdup("1.0.0"); // Caller is responsible for freeing this memory
-    }
 }

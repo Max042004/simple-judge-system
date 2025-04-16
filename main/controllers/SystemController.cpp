@@ -1,7 +1,6 @@
 // controllers/SystemController.cpp
 #include "SystemController.h"
 #include "../tiny-server.h"
-#include "../Global.h"
 #include <iostream>
 #include <cstdlib>
 
@@ -42,16 +41,16 @@ int SystemController::mainPage() {
     if (status == "NOT READY") {
         loadData();
         status = "USER LOGIN";
+        start_server();
         return 0;
     }
     
     if (status == "USER LOGIN") {
-        if (authController.login()) {
+        if (!userRepo.getIsLogin()) {
+            AcceptRequest();
             status = "READY";
-            start_server();
-        } else {
             return 0;
-        }
+            }
     }
     
     mainMenuView.displayMainMenu();

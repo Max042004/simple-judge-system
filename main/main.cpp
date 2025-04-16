@@ -7,21 +7,24 @@
 #define LOGIN_MSG_PATH "./msg/login.txt"
 #define VERSION "1.0.0"
 
+SystemController* globalSystemController = nullptr;
+
 int main() {
     #ifdef _WIN32
         system("cls");
     #else
-        //system("clear");
+        system("clear");
     #endif
 
-    SystemController system(USER_DATA_PATH, PROBLEM_DATA_PATH, LOGIN_MSG_PATH, VERSION);
+    globalSystemController = new SystemController(USER_DATA_PATH, PROBLEM_DATA_PATH, LOGIN_MSG_PATH, VERSION);
     std::cout << BLUE_TEXT("Simple Judge System start! Version: ") << VERSION << "\n";
 
     int result = 0;
     
     do {
-        result = system.mainPage();
+        result = globalSystemController->mainPage();
     } while (result == 0);
 
+    delete globalSystemController;
     return 0;
 }
