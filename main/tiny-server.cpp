@@ -490,50 +490,65 @@ void handle_request(int fd, http_request *req) {
         }
     }
     // API endpoint for login
-    else if (strncmp(req->request_path, "/api/user_login", 15) == 0) {
-        char buf[MAXLINE];
-        if (strcasecmp(req->method, "POST") == 0) {
-            // Parse POST data for username and password
-            // This is a very simple parser for "username=foo&password=bar" format
-            char *username_str = strstr(req->post_data, "username=");
-            char *password_str = strstr(req->post_data, "password=");
-            
-            if (username_str && password_str) {
-                // Extract username
-                username_str += 9; // Skip "username="
-                char *end = strchr(username_str, '&');
-                if (end) *end = '\0';
-                url_decode(username_str, username, 256);
-                printf("%s\n", username);
-                
-                // Extract password
-                password_str += 9; // Skip "password="
-                end = strchr(password_str, '&');
-                if (end) *end = '\0';
-                url_decode(password_str, password, 256);
-                
-                // Call the judge system login function
-                globalSystemController->getUserRepo().setCurrentUser(username);
+else if (strncmp(req->request_path, "/api/user_login", 15) == 0) {
+    char buf[MAXLINE];
+    size_t len = 0; //track written bytes in buf
 
-                sprintf(buf, "HTTP/1.1 303 See Other\r\nLocation: /api/login\r\n\r\n");
-                writen(fd, buf, strlen(buf));
-                return;
-                
-            } else {
-                sprintf(response, "{\"success\": false, \"message\": \"Missing username or password\"}");
-            }
+    if (strcasecmp(req->method, "POST") == 0) {
+        // Parse POST data for username and password
+        // This is a very simple parser for "username=foo&password=bar" format
+        char *username_str = strstr(req->post_data, "username=");
+        char *password_str = strstr(req->post_data, "password=");
+        
+        if (username_str && password_str) {
+            // Extract username
+            username_str += 9; // Skip "username="
+            char *end = strchr(username_str, '&');
+            if (end) *end = '\0';
+            url_decode(username_str, username, 256);
+            printf("%s\n", username);
             
-            // Send the response
-            sprintf(buf, "HTTP/1.1 200 OK\r\n");
-            sprintf(buf + strlen(buf), "Content-length: %lu\r\n", strlen(response));
-            sprintf(buf + strlen(buf), "Content-type: application/json\r\n\r\n");
-            sprintf(buf + strlen(buf), "%s", response);
+            // Extract password
+            password_str += 9; // Skip "password="
+            end = strchr(password_str, '&');
+            if (end) *end = '\0';
+            url_decode(password_str, password, 256);
+            
+            // Call the judge system login function
+            globalSystemController->getUserRepo().setCurrentUser(username);
+
+            // 303 redirect
+            snprintf(buf, sizeof(buf),
+                     "HTTP/1.1 303 See Other\r\n"
+                     "Location: /api/login\r\n"
+                     "\r\n");
             writen(fd, buf, strlen(buf));
+            return;
         } else {
-            printf("%s\n", req->method);
-            client_error(fd, 405, "Method Not Allowed", "Only POST requests are allowed for check_login");
+            snprintf(response, sizeof(response),
+                     "{\"success\": false, \"message\": \"Missing username or password\"}");
         }
+        
+        // Send the response
+        //HTTP status line
+        len += snprintf(buf + len, sizeof(buf) - len,
+                        "HTTP/1.1 200 OK\r\n");
+        //Content-length
+        len += snprintf(buf + len, sizeof(buf) - len,
+                        "Content-length: %lu\r\n", strlen(response));
+        //Content-type
+        len += snprintf(buf + len, sizeof(buf) - len,
+                        "Content-type: application/json\r\n\r\n");
+        //Response body (JSON)
+        len += snprintf(buf + len, sizeof(buf) - len,
+                        "%s", response);
+
+        writen(fd, buf, len);
+    } else {
+        printf("%s\n", req->method);
+        client_error(fd, 405, "Method Not Allowed", "Only POST requests are allowed for check_login");
     }
+}
     // API endpoint for getting login user name
     else if (strncmp(req->request_path, "/api/opt/1", 10) == 0) {
         if (strcasecmp(req->method, "GET") == 0) {
