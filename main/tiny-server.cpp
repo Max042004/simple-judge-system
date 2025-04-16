@@ -580,6 +580,17 @@ void process(int fd, struct sockaddr_in *clientaddr) {
         return;
     }
 
+    // client only allow to acccess main/pages .html files
+    if (strncmp(req.file_name, "main/pages/", 11) != 0 || 
+        strstr(req.file_name, "..") != NULL || 
+        strstr(req.file_name, "/") == NULL || 
+        strlen(req.file_name) < 6 || 
+        strcmp(req.file_name + strlen(req.file_name) - 5, ".html") != 0) {
+        
+        client_error(fd, 403, "Forbidden", "You are not allowed to access this file.");
+        return;
+    }
+
     // Open the file
     struct stat sbuf;
     int status = stat(req.file_name, &sbuf);
