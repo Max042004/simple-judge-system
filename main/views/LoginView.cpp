@@ -16,7 +16,7 @@ void LoginView::showLoginSuccess(const std::string& username) {
 }
 
 void LoginView::showRegistrationSuccess(const std::string& username) {
-    std::cout << GREEN_TEXT("Registration successful!\n");
+    std::cout << username << GREEN_TEXT("Registration successful!\n");
 }
 
 void LoginView::showPasswordMismatch() {
