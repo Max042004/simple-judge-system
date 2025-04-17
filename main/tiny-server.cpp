@@ -399,8 +399,8 @@ void serve_static(int out_fd, int in_fd, http_request *req,
 
 // New function to handle API requests
 void handle_request(int fd, http_request *req) {
-    char response[4096];
-    char username[256], password[256];
+    char response[MAXLINE];
+    char buf[MAXLINE * 2]; // avoid buffer overflow
     
     // API endpoint for login
     if (strncmp(req->request_path, "/api/login", 10) == 0) {
@@ -410,7 +410,12 @@ void handle_request(int fd, http_request *req) {
                 serve_login_page(fd);
             }
             else{
-                serve_submission_page(fd, globalSystemController->getAuthController().getCurrentUser().c_str());
+                // 303 redirect
+                snprintf(buf, sizeof(buf),
+                "HTTP/1.1 303 See Other\r\n"
+                "Location: /api/submission\r\n"
+                "\r\n");
+                writen(fd, buf, strlen(buf));
             }
         } else {
             client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for login");
@@ -418,10 +423,10 @@ void handle_request(int fd, http_request *req) {
     }
     // API endpoint for login
 else if (strncmp(req->request_path, "/api/user_login", 15) == 0) {
-    char buf[MAXLINE];
-    size_t len = 0; //track written bytes in buf
 
     if (strcasecmp(req->method, "POST") == 0) {
+        size_t len = 0; //track written bytes in buf
+        char username[256], password[256];
         // Parse POST data for username and password
         // This is a very simple parser for "username=foo&password=bar" format
         char *username_str = strstr(req->post_data, "username=");
@@ -450,12 +455,45 @@ else if (strncmp(req->request_path, "/api/user_login", 15) == 0) {
                      "Location: /api/login\r\n"
                      "\r\n");
             writen(fd, buf, strlen(buf));
-            return;
         } else {
             snprintf(response, sizeof(response),
                      "{\"success\": false, \"message\": \"Missing username or password\"}");
         }
         
+        // Send the response
+        //HTTP status line
+        len += snprintf(buf + len, sizeof(buf) - len,
+                        "HTTP/1.1 200 OK\r\n");
+        //Content-length
+        len += snprintf(buf + len, sizeof(buf) - len,
+                        "Content-length: %lu\r\n", strlen(response));
+        //Content-type
+        len += snprintf(buf + len, sizeof(buf) - len,
+                        "Content-type: application/json\r\n\r\n");
+        //Response body (JSON)
+        len += snprintf(buf + len, sizeof(buf) - len,
+                        "%s", response);
+
+        writen(fd, buf, len);
+    } else {
+        printf("%s\n", req->method);
+        client_error(fd, 405, "Method Not Allowed", "Only POST requests are allowed for check_login");
+    }
+}
+    // API endpoint for submission
+else if (strncmp(req->request_path, "/api/submission", 15) == 0) {
+    if (strcasecmp(req->method, "GET") == 0) {
+        size_t len = 0;
+        if (globalSystemController->getUserRepo().getIsLogin()){
+            serve_submission_page(fd, globalSystemController->getAuthController().getCurrentUser().c_str());
+        } else {
+            // 303 redirect
+            snprintf(buf, sizeof(buf),
+                     "HTTP/1.1 303 See Other\r\n"
+                     "Location: /api/login\r\n"
+                     "\r\n");
+            writen(fd, buf, strlen(buf));
+        }
         // Send the response
         //HTTP status line
         len += snprintf(buf + len, sizeof(buf) - len,
@@ -482,13 +520,9 @@ else if (strncmp(req->request_path, "/api/user_login", 15) == 0) {
             // Call the judge system function to get version
             std::string username = globalSystemController->getAuthController().getCurrentUser();
             const char* name = username.c_str();
-            
-            // Format HTML response body
-            char response[MAXLINE];
+
             snprintf(response, sizeof(response), "<p>Hello %s</p>", name);
 
-            // Build HTTP response
-            char buf[MAXLINE * 2]; // Just to be safe
             snprintf(buf, sizeof(buf),
                 "HTTP/1.1 200 OK\r\n"
                 "Content-length: %lu\r\n"
