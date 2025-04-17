@@ -385,15 +385,16 @@ void serve_static(int out_fd, int in_fd, http_request *req,
     // Copy file content
     off_t offset = req->offset;
     size_t remaining = req->end - req->offset;
-    while(remaining > 0) {
-        if(sendfile(out_fd, in_fd, &offset, req->end - req->offset) <= 0) {
+    while (remaining > 0) {
+        ssize_t sent = sendfile(out_fd, in_fd, &offset, remaining);
+        if (sent <= 0) {
+            perror("sendfile");
             break;
         }
+        remaining -= static_cast<size_t>(sent);
 #ifdef LOG_ACCESS
-        printf("offset: %lu \n\n", offset);
+        printf("sendfile(): %zd bytes, %zu remaining\n", sent, remaining);
 #endif
-        close(out_fd);
-        break;
     }
 }
 
