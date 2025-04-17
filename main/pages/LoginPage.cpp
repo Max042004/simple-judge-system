@@ -69,7 +69,7 @@ void serve_submission_page(int client_socket, const char* username) {
         "<body>\n"
         "    <div class='header'>\n"
         "        <div class='welcome'>Welcome, %s!</div>\n"
-        "        <a href='/logout'>Logout</a>\n"
+        "        <a href='/api/logout'>Logout</a>\n"
         "    </div>\n"
         "    <h2>Submit Code</h2>\n"
         "    <form action='/submit' method='post'>\n"

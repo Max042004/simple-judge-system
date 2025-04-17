@@ -446,40 +446,78 @@ else if (strncmp(req->request_path, "/api/user_login", 15) == 0) {
             if (end) *end = '\0';
             url_decode(password_str, password, 256);
             
-            // Call the judge system login function
-            globalSystemController->getUserRepo().setCurrentUser(username);
-
-            // 303 redirect
-            snprintf(buf, sizeof(buf),
-                     "HTTP/1.1 303 See Other\r\n"
-                     "Location: /api/login\r\n"
-                     "\r\n");
-            writen(fd, buf, strlen(buf));
+            // validate
+            if(globalSystemController->getAuthController().loginUserAPI(username, password)){
+                globalSystemController->getUserRepo().setCurrentUser(username);
+                // 303 redirect
+                snprintf(buf, sizeof(buf),
+                "HTTP/1.1 303 See Other\r\n"
+                "Location: /api/submission\r\n"
+                "\r\n");
+                writen(fd, buf, strlen(buf));
+                
+                // 
+                return;
+            }
+            else {
+                // send wrong password or user not found
+                const char *msg = "Invalid username or password";
+                len = snprintf(buf, sizeof(buf),
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: text/html; charset=utf-8\r\n"
+                    "\r\n"
+                    "<!DOCTYPE html>"
+                    "<html><head><meta charset=\"utf-8\"></head><body>"
+                    "<script>"
+                    "alert('%s');"
+                    "window.location.href = '/api/login';"
+                    "</script>"
+                    "</body></html>",
+                    msg);
+                writen(fd, buf, len);
+            }
         } else {
             snprintf(response, sizeof(response),
                      "{\"success\": false, \"message\": \"Missing username or password\"}");
         }
-        
-        // Send the response
-        //HTTP status line
-        len += snprintf(buf + len, sizeof(buf) - len,
-                        "HTTP/1.1 200 OK\r\n");
-        //Content-length
-        len += snprintf(buf + len, sizeof(buf) - len,
-                        "Content-length: %lu\r\n", strlen(response));
-        //Content-type
-        len += snprintf(buf + len, sizeof(buf) - len,
-                        "Content-type: application/json\r\n\r\n");
-        //Response body (JSON)
-        len += snprintf(buf + len, sizeof(buf) - len,
-                        "%s", response);
-
-        writen(fd, buf, len);
     } else {
         printf("%s\n", req->method);
         client_error(fd, 405, "Method Not Allowed", "Only POST requests are allowed for check_login");
     }
 }
+// API endpoint for getting login user name
+else if (strncmp(req->request_path, "/api/logout", 11) == 0) {
+    if (strcasecmp(req->method, "GET") == 0) {
+        if(globalSystemController->getAuthController().logoutAPI()){
+            // 303 redirect
+            snprintf(buf, sizeof(buf),
+            "HTTP/1.1 303 See Other\r\n"
+            "Location: /api/login\r\n"
+            "\r\n");
+            writen(fd, buf, strlen(buf));
+        }
+        else{ 
+            size_t len = 0;
+            const char *msg = "Only login user is allowed to logout";
+            len = snprintf(buf, sizeof(buf),
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/html; charset=utf-8\r\n"
+                "\r\n"
+                "<!DOCTYPE html>"
+                "<html><head><meta charset=\"utf-8\"></head><body>"
+                "<script>"
+                "alert('%s');"
+                "window.location.href = '/api/login';"
+                "</script>"
+                "</body></html>",
+                msg);
+            writen(fd, buf, len);
+        }
+    } else {
+        client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for getting version");
+    }
+}
+
     // API endpoint for submission
 else if (strncmp(req->request_path, "/api/submission", 15) == 0) {
     if (strcasecmp(req->method, "GET") == 0) {
@@ -494,21 +532,6 @@ else if (strncmp(req->request_path, "/api/submission", 15) == 0) {
                      "\r\n");
             writen(fd, buf, strlen(buf));
         }
-        // Send the response
-        //HTTP status line
-        len += snprintf(buf + len, sizeof(buf) - len,
-                        "HTTP/1.1 200 OK\r\n");
-        //Content-length
-        len += snprintf(buf + len, sizeof(buf) - len,
-                        "Content-length: %lu\r\n", strlen(response));
-        //Content-type
-        len += snprintf(buf + len, sizeof(buf) - len,
-                        "Content-type: application/json\r\n\r\n");
-        //Response body (JSON)
-        len += snprintf(buf + len, sizeof(buf) - len,
-                        "%s", response);
-
-        writen(fd, buf, len);
     } else {
         printf("%s\n", req->method);
         client_error(fd, 405, "Method Not Allowed", "Only POST requests are allowed for check_login");

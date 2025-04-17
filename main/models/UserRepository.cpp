@@ -88,6 +88,15 @@ std::string UserRepository::getCurrentUser() const {
     return currentUser;
 }
 
+bool UserRepository::setLogOut() {
+    if(!is_login){
+        return false;
+    }
+    is_login = false;
+    currentUser = "";
+    return true;
+}
+
 bool UserRepository::getIsLogin() {
     return is_login;
 }
