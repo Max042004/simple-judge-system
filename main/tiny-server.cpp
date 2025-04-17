@@ -514,7 +514,7 @@ else if (strncmp(req->request_path, "/api/logout", 11) == 0) {
             writen(fd, buf, len);
         }
     } else {
-        client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for getting version");
+        client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for logout");
     }
 }
 
@@ -534,7 +534,15 @@ else if (strncmp(req->request_path, "/api/submission", 15) == 0) {
         }
     } else {
         printf("%s\n", req->method);
-        client_error(fd, 405, "Method Not Allowed", "Only POST requests are allowed for check_login");
+        client_error(fd, 405, "Method Not Allowed", "Only GET or POST are allowed for submission");
+    }
+}
+// API endpoint for submission
+else if (strncmp(req->request_path, "/api/submission", 15) == 0) {
+    if (strcasecmp(req->method, "POST") == 0) {
+    } else {
+        printf("%s\n", req->method);
+        client_error(fd, 405, "Method Not Allowed", "Only GET or POST are allowed for submission");
     }
 }
     // API endpoint for getting login user name
@@ -553,7 +561,7 @@ else if (strncmp(req->request_path, "/api/submission", 15) == 0) {
                 "%s", strlen(response), response);
             writen(fd, buf, strlen(buf));
         } else {
-            client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for getting version");
+            client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for getting username");
         }
     }
     // Unknown API endpoint
