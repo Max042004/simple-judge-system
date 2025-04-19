@@ -51,6 +51,23 @@ bool AuthController::login() {
     }
 }
 
+bool AuthController::loginUserAPI(char* username, char* password) {
+    // Find user
+    User* user = userRepo.findByUsername(username);
+    if (!user) {
+        return false;
+    }
+    
+    // Validate password
+    if(password != user->getPassword()){
+        return false;
+    }
+    
+    // Login successful
+    userRepo.setCurrentUser(user->getUsername());
+    return true;
+}
+
 bool AuthController::registerUser() {
     std::string username, password, confirmPassword;
     int isPasswordWrong = 0;
@@ -82,6 +99,11 @@ bool AuthController::registerUser() {
     }
     
     return false;
+}
+
+bool AuthController::logoutAPI() {
+    if(userRepo.setLogOut()) return true;
+    else return false;
 }
 
 std::string AuthController::getCurrentUser() const {

@@ -400,18 +400,21 @@ void serve_static(int out_fd, int in_fd, http_request *req,
 
 // New function to handle API requests
 void handle_request(int fd, http_request *req) {
-    char response[4096];
-    char username[256], password[256];
-    
     // API endpoint for login
     if (strncmp(req->request_path, "/api/login", 10) == 0) {
         if (strcasecmp(req->method, "GET") == 0) {
+            char buf[MAXLINE];
             // If user is not logged in, show login page
             if(!globalSystemController->getUserRepo().getIsLogin()){
                 serve_login_page(fd);
             }
             else{
-                serve_submission_page(fd, globalSystemController->getAuthController().getCurrentUser().c_str());
+                // 303 redirect
+                snprintf(buf, sizeof(buf),
+                "HTTP/1.1 303 See Other\r\n"
+                "Location: /api/submission\r\n"
+                "\r\n");
+                writen(fd, buf, strlen(buf));
             }
         } else {
             client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for login");
@@ -419,10 +422,12 @@ void handle_request(int fd, http_request *req) {
     }
     // API endpoint for login
 else if (strncmp(req->request_path, "/api/user_login", 15) == 0) {
-    char buf[MAXLINE];
-    size_t len = 0; //track written bytes in buf
 
     if (strcasecmp(req->method, "POST") == 0) {
+        size_t len = 0; //track written bytes in buf
+        char response[MAXLINE];
+        char buf[MAXLINE*2]; // bigger than response to avoid buffer overflow
+        char username[256], password[256];
         // Parse POST data for username and password
         // This is a very simple parser for "username=foo&password=bar" format
         char *username_str = strstr(req->post_data, "username=");
@@ -442,54 +447,212 @@ else if (strncmp(req->request_path, "/api/user_login", 15) == 0) {
             if (end) *end = '\0';
             url_decode(password_str, password, 256);
             
-            // Call the judge system login function
-            globalSystemController->getUserRepo().setCurrentUser(username);
+            // validate
+            if(globalSystemController->getAuthController().loginUserAPI(username, password)){
+                globalSystemController->getUserRepo().setCurrentUser(username);
+                // 303 redirect
+                snprintf(buf, sizeof(buf),
+                "HTTP/1.1 303 See Other\r\n"
+                "Location: /api/submission\r\n"
+                "\r\n");
+                writen(fd, buf, strlen(buf));
+                
+                // 
+                return;
+            }
+            else {
+                // send wrong password or user not found
+                const char *msg = "Invalid username or password";
+                len = snprintf(buf, sizeof(buf),
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: text/html; charset=utf-8\r\n"
+                    "\r\n"
+                    "<!DOCTYPE html>"
+                    "<html><head><meta charset=\"utf-8\"></head><body>"
+                    "<script>"
+                    "alert('%s');"
+                    "window.location.href = '/api/login';"
+                    "</script>"
+                    "</body></html>",
+                    msg);
+                writen(fd, buf, len);
+            }
+        } else {
+            snprintf(response, sizeof(response),
+                     "{\"success\": false, \"message\": \"Missing username or password\"}");
+        }
+    } else {
+        printf("%s\n", req->method);
+        client_error(fd, 405, "Method Not Allowed", "Only POST requests are allowed for check_login");
+    }
+}
+// API endpoint for getting login user name
+else if (strncmp(req->request_path, "/api/logout", 11) == 0) {
+    if (strcasecmp(req->method, "GET") == 0) {
+        char buf[MAXLINE];
+        if(globalSystemController->getAuthController().logoutAPI()){
+            // 303 redirect
+            snprintf(buf, sizeof(buf),
+            "HTTP/1.1 303 See Other\r\n"
+            "Location: /api/login\r\n"
+            "\r\n");
+            writen(fd, buf, strlen(buf));
+        }
+        else{ 
+            size_t len = 0;
+            const char *msg = "Only login user is allowed to logout";
+            len = snprintf(buf, sizeof(buf),
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/html; charset=utf-8\r\n"
+                "\r\n"
+                "<!DOCTYPE html>"
+                "<html><head><meta charset=\"utf-8\"></head><body>"
+                "<script>"
+                "alert('%s');"
+                "window.location.href = '/api/login';"
+                "</script>"
+                "</body></html>",
+                msg);
+            writen(fd, buf, len);
+        }
+    } else {
+        client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for logout");
+    }
+}
 
+    // API endpoint for submission
+else if (strncmp(req->request_path, "/api/submission", 15) == 0) {
+    if (strcasecmp(req->method, "GET") == 0) {
+        char buf[MAXLINE];
+        size_t len = 0;
+        if (globalSystemController->getUserRepo().getIsLogin()){
+            serve_submission_page(fd, globalSystemController->getAuthController().getCurrentUser().c_str());
+        } else {
             // 303 redirect
             snprintf(buf, sizeof(buf),
                      "HTTP/1.1 303 See Other\r\n"
                      "Location: /api/login\r\n"
                      "\r\n");
             writen(fd, buf, strlen(buf));
-            return;
-        } else {
-            snprintf(response, sizeof(response),
-                     "{\"success\": false, \"message\": \"Missing username or password\"}");
         }
-        
-        // Send the response
-        //HTTP status line
-        len += snprintf(buf + len, sizeof(buf) - len,
-                        "HTTP/1.1 200 OK\r\n");
-        //Content-length
-        len += snprintf(buf + len, sizeof(buf) - len,
-                        "Content-length: %lu\r\n", strlen(response));
-        //Content-type
-        len += snprintf(buf + len, sizeof(buf) - len,
-                        "Content-type: application/json\r\n\r\n");
-        //Response body (JSON)
-        len += snprintf(buf + len, sizeof(buf) - len,
-                        "%s", response);
-
-        writen(fd, buf, len);
     } else {
         printf("%s\n", req->method);
-        client_error(fd, 405, "Method Not Allowed", "Only POST requests are allowed for check_login");
+        client_error(fd, 405, "Method Not Allowed", "Only GET or POST are allowed for submission");
+    }
+}
+// API endpoint for submission
+else if (strncmp(req->request_path, "/api/submit", 11) == 0) {
+    char response[MAXLINE*8];
+    char buf[MAXLINE*9];
+    if (strcasecmp(req->method, "POST") == 0) {
+        // Check if user is logged in
+        if (!globalSystemController->getUserRepo().getIsLogin()) {
+            // Redirect to login page if not logged in
+            snprintf(buf, sizeof(buf),
+                "HTTP/1.1 303 See Other\r\n"
+                "Location: /api/login\r\n"
+                "\r\n");
+            writen(fd, buf, strlen(buf));
+            return;
+        }
+        
+        // Parse the form data to extract problem ID and code
+        char problem_id[10] = {0};
+        char code[4096] = {0};
+        char *problem_str = strstr(req->post_data, "problem=");
+        char *code_str = strstr(req->post_data, "code=");
+        
+        if (problem_str && code_str) {
+            // Extract problem ID
+            problem_str += 8; // Skip "problem="
+            char *end = strchr(problem_str, '&');
+            if (end) *end = '\0';
+            url_decode(problem_str, problem_id, sizeof(problem_id));
+            
+            // Extract code
+            code_str += 5; // Skip "code="
+            url_decode(code_str, code, sizeof(code));
+            
+            // Get current username
+            std::string username = globalSystemController->getAuthController().getCurrentUser();
+
+            char src_path[128] = "/home/max/PD2/HW/simple-judge-system/main/containers";
+
+            // 2. Run container, mounting the whole directory
+            char command[512];
+            snprintf(command, sizeof(command),
+                    "sudo docker run --rm "
+                    "-v %s:/src/myprog.c:ro "
+                    "online-judge-compiler",
+                    src_path);
+
+            // 用 popen 以讀取模式打開
+            FILE* fp = popen(command, "r");
+            if (!fp) {
+                client_error(fd, 500, "Internal Server Error",
+                            "Failed to launch Docker compiler");
+                return;
+            }
+
+            // 讀取 docker run 的 stdout（包含編譯與執行輸出）
+            char output[8192];
+            size_t pos = 0;
+            while (fgets(output + pos, sizeof(output) - pos, fp) != nullptr) {
+                pos = strlen(output);
+                if (pos + 1 >= sizeof(output)) break;
+            }
+
+            // 關閉管道，並拿到 exit code
+            int status = pclose(fp);
+            int exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+
+            // … Clean up submission file if needed …
+
+            // 準備 HTML 回應
+            const char* result_template =
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/html\r\n"
+                "\r\n"
+                "<html><body>"
+                "<h2>Results for Problem %s</h2>"
+                "<pre>%s</pre>"
+                "<p style='color:%s'>Status: %s (code %d)</p>"
+                "<a href='/api/submission'>Try again</a>"
+                "</body></html>";
+
+            const char* status_class = exit_code == 0 ? "green" : "red";
+            const char* status_text  = exit_code == 0 
+                ? "Executed Successfully" 
+                : "Execution Failed";
+
+            char response[16384];
+            int n = snprintf(response, sizeof(response),
+                result_template,
+                problem_id,
+                output,
+                status_class,
+                status_text,
+                exit_code);
+
+            writen(fd, response, n);
+        } else {
+            client_error(fd, 400, "Bad Request", "Missing problem ID or code");
+        }
+    } else {
+        client_error(fd, 405, "Method Not Allowed", "Only POST requests are allowed for submitting code");
     }
 }
     // API endpoint for getting login user name
     else if (strncmp(req->request_path, "/api/opt/1", 10) == 0) {
+        char response[MAXLINE];
+        char buf[MAXLINE*2];
         if (strcasecmp(req->method, "GET") == 0) {
             // Call the judge system function to get version
             std::string username = globalSystemController->getAuthController().getCurrentUser();
             const char* name = username.c_str();
-            
-            // Format HTML response body
-            char response[MAXLINE];
+
             snprintf(response, sizeof(response), "<p>Hello %s</p>", name);
 
-            // Build HTTP response
-            char buf[MAXLINE * 2]; // Just to be safe
             snprintf(buf, sizeof(buf),
                 "HTTP/1.1 200 OK\r\n"
                 "Content-length: %lu\r\n"
@@ -497,7 +660,7 @@ else if (strncmp(req->request_path, "/api/user_login", 15) == 0) {
                 "%s", strlen(response), response);
             writen(fd, buf, strlen(buf));
         } else {
-            client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for getting version");
+            client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for getting username");
         }
     }
     // Unknown API endpoint

@@ -28,6 +28,7 @@ public:
     // Current user management
     void setCurrentUser(const std::string& username);
     std::string getCurrentUser() const;
+    bool setLogOut();
     
     // access to whether login
     bool getIsLogin();
