@@ -101,6 +101,14 @@ bool AuthController::registerUser() {
     return false;
 }
 
+bool AuthController::registerUserAPI(char* username, char* password) {
+    // Add user and login
+    if (userRepo.addUser(username, password)) {
+        userRepo.setCurrentUser(username);
+        return true;
+    }
+}
+
 bool AuthController::logoutAPI() {
     if(userRepo.setLogOut()) return true;
     else return false;

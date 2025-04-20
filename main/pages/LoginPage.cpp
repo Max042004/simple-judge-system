@@ -31,7 +31,7 @@ void serve_login_page(int client_socket) {
         "      <input type='password' name='password' placeholder='Password' required>\n"
         "      <input type='submit' value='Login'>\n"
         "    </form>\n"
-        "    <p><a href='/api/signup'>Don’t have an account? Sign Up</a></p>\n"
+        "    <p><a href='/api/signup'>Don't have an account? Sign Up</a></p>\n"
         "    <p class='error'>%s</p>\n"
         "  </div>\n"
         "</body>\n"

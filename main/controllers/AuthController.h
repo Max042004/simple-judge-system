@@ -16,6 +16,7 @@ public:
     
     bool login();
     bool registerUser();
+    bool registerUserAPI(char* username, char* password);
     bool loginUserAPI(char* username, char* password);
     bool logoutAPI();
     std::string getCurrentUser() const;

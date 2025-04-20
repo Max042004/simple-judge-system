@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include "pages/LoginPage.h"
+#include "pages/SignupPage.h"
 #include "controllers/SystemController.h"
 
 #define LISTENQ  1024  /* second argument to listen() */
@@ -420,6 +421,90 @@ void handle_request(int fd, http_request *req) {
             client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for login");
         }
     }
+    // API endpoint for user signup
+else if (strncmp(req->request_path, "/api/user_signup", 16) == 0) {
+    if (strcasecmp(req->method, "POST") == 0) {
+        char buf[MAXLINE * 2];  // 回應用 buffer
+        char username[256] = {0}, password[256] = {0};
+        char *username_str = strstr(req->post_data, "username=");
+        char *password_str = strstr(req->post_data, "password=");
+        
+        if (username_str && password_str) {
+            // 解析 username
+            username_str += strlen("username=");
+            char *end = strchr(username_str, '&');
+            if (end) *end = '\0';
+            url_decode(username_str, username, sizeof(username));
+            
+            // 解析 password
+            password_str += strlen("password=");
+            end = strchr(password_str, '&');
+            if (end) *end = '\0';
+            url_decode(password_str, password, sizeof(password));
+            
+            // 密碼確認（可根據需求加上更嚴格檢查）
+            if (strlen(password) < 6) {
+                // 密碼太短
+                int len = snprintf(buf, sizeof(buf),
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: text/html; charset=utf-8\r\n"
+                    "\r\n"
+                    "<!DOCTYPE html>"
+                    "<html><head><meta charset=\"utf-8\"></head><body>"
+                    "<script>"
+                    "alert('Password must be at least 6 characters');"
+                    "window.location.href = '/api/signup';"
+                    "</script>"
+                    "</body></html>");
+                writen(fd, buf, len);
+                return;
+            }
+            
+            // 呼叫你的註冊 API，回傳 true 表示註冊成功
+            if (globalSystemController->getAuthController().registerUserAPI(username, password)) {
+                // 順便在 session or repo 設定當前使用者（可選）
+                globalSystemController->getUserRepo().setCurrentUser(username);
+                
+                // 303 重導到登入頁，或直接導到登入後能看到的頁面
+                snprintf(buf, sizeof(buf),
+                    "HTTP/1.1 303 See Other\r\n"
+                    "Location: /api/login\r\n"
+                    "\r\n");
+                writen(fd, buf, strlen(buf));
+                return;
+            } else {
+                // 帳號已存在或其他錯誤
+                int len = snprintf(buf, sizeof(buf),
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: text/html; charset=utf-8\r\n"
+                    "\r\n"
+                    "<!DOCTYPE html>"
+                    "<html><head><meta charset=\"utf-8\"></head><body>"
+                    "<script>"
+                    "alert('Username already taken or signup failed');"
+                    "window.location.href = '/api/signup';"
+                    "</script>"
+                    "</body></html>");
+                writen(fd, buf, len);
+                return;
+            }
+        } else {
+            // 缺少參數
+            int len = snprintf(buf, sizeof(buf),
+                "HTTP/1.1 400 Bad Request\r\n"
+                "Content-Type: application/json\r\n"
+                "\r\n"
+                "{\"success\":false,\"message\":\"Missing username or password\"}");
+            writen(fd, buf, len);
+            return;
+        }
+    } else {
+        // 非 POST 拒絕
+        client_error(fd, 405, "Method Not Allowed",
+                     "Only POST is allowed for /api/user_signup");
+        return;
+    }
+}
     // API endpoint for login
     if (strncmp(req->request_path, "/api/login", 10) == 0) {
         if (strcasecmp(req->method, "GET") == 0) {

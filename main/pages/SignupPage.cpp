@@ -1,3 +1,7 @@
+#include "../tiny-server.h"
+#include <string.h>
+#include <stdio.h>
+
 // Serve the sign‑up page (GET /signup)
 void serve_signup_page(int client_socket) {
     const char* signup_template =
@@ -27,7 +31,7 @@ void serve_signup_page(int client_socket) {
         "      <input type='password' name='confirm' placeholder='Confirm password' required>\n"
         "      <input type='submit' value='Register'>\n"
         "    </form>\n"
-        "    <p><a href='/login'>Already have an account? Login</a></p>\n"
+        "    <p><a href='/api/login'>Already have an account? Login</a></p>\n"
         "    <p class='error'>%s</p>\n"
         "  </div>\n"
         "</body>\n"
