@@ -25,7 +25,7 @@
 #define RIO_BUFSIZE 1024
 
 #ifndef DEFAULT_PORT
-#define DEFAULT_PORT 9999 /* use this port if none given as arg to main() */
+#define DEFAULT_PORT 9998 /* use this port if none given as arg to main() */
 #endif
 
 #ifndef NO_LOG_ACCESS
@@ -576,34 +576,48 @@ else if (strncmp(req->request_path, "/api/submit", 11) == 0) {
             // Get current username
             std::string username = globalSystemController->getAuthController().getCurrentUser();
 
-            char src_path[128] = "/home/max/PD2/HW/simple-judge-system/main/containers";
+            // 1. 把 submission code 儲存到臨時檔
+            char src_file[256];
+            snprintf(src_file, sizeof(src_file),
+                    "/tmp/sub_%d_%ld.c", getpid(), time(NULL));
 
-            // 2. Run container, mounting the whole directory
-            char command[512];
-            snprintf(command, sizeof(command),
-                    "sudo docker run --rm "
-                    "-v %s:/src/myprog.c:ro "
-                    "online-judge-compiler",
-                    src_path);
+            FILE* fp = fopen(src_file, "w");
+            fputs(code, fp);      // code = 使用者 POST 上來的程式碼
+            fclose(fp);
+
+            // 2. Run sandbox, mounting the whole directory
+            char cmd[1024];
+            snprintf(cmd, sizeof(cmd),
+                    "unshare --user --map-root-user --mount --pid --fork --mount-proc=/proc "
+                    "bash -c '"
+                        "set -e; "
+                        "TMPROOT=$(mktemp -d); chmod 700 \"$TMPROOT\"; "
+                        "mount -t tmpfs -o size=128M tmpfs \"$TMPROOT\"; "
+                        "cp %s \"$TMPROOT/sub.c\"; cd \"$TMPROOT\"; "
+                        "ulimit -t 2 -v $((64*1024)) -f $((1*1024)); "
+                        "gcc -O2 -static sub.c -o prog; "
+                        "./prog"
+                    "' 2>&1",
+                    src_file);
 
             // 用 popen 以讀取模式打開
-            FILE* fp = popen(command, "r");
-            if (!fp) {
+            FILE* pipe = popen(cmd, "r");
+            if (!pipe) {
                 client_error(fd, 500, "Internal Server Error",
                             "Failed to launch Docker compiler");
                 return;
             }
 
             // 讀取 docker run 的 stdout（包含編譯與執行輸出）
-            char output[8192];
+            char output[1024];
             size_t pos = 0;
-            while (fgets(output + pos, sizeof(output) - pos, fp) != nullptr) {
+            while (fgets(output + pos, sizeof(output) - pos, pipe) != nullptr) {
                 pos = strlen(output);
                 if (pos + 1 >= sizeof(output)) break;
             }
 
             // 關閉管道，並拿到 exit code
-            int status = pclose(fp);
+            int status = pclose(pipe);
             int exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 
             // … Clean up submission file if needed …
