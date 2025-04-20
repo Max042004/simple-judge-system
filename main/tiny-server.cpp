@@ -400,6 +400,26 @@ void serve_static(int out_fd, int in_fd, http_request *req,
 
 // New function to handle API requests
 void handle_request(int fd, http_request *req) {
+    // API endpoint for signup
+    if (strncmp(req->request_path, "/api/signup", 11) == 0) {
+        if (strcasecmp(req->method, "GET") == 0) {
+            char buf[MAXLINE];
+            // If user is not logged in, show login page
+            if(!globalSystemController->getUserRepo().getIsLogin()){
+                serve_signup_page(fd);
+            }
+            else{
+                // 303 redirect
+                snprintf(buf, sizeof(buf),
+                "HTTP/1.1 303 See Other\r\n"
+                "Location: /api/submission\r\n"
+                "\r\n");
+                writen(fd, buf, strlen(buf));
+            }
+        } else {
+            client_error(fd, 405, "Method Not Allowed", "Only GET requests are allowed for login");
+        }
+    }
     // API endpoint for login
     if (strncmp(req->request_path, "/api/login", 10) == 0) {
         if (strcasecmp(req->method, "GET") == 0) {
